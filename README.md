@@ -127,3 +127,11 @@ crabui/
 ```
 
 所有文件读写都在 Rust 侧完成，并限制在选定的 `themes` 目录内；前端不直接接触文件系统。
+
+---
+
+## 开源许可
+
+本项目采用 [GNU General Public License v3.0 or later](LICENSE)。这意味着你可以自由使用、修改和分发它，但分发修改版时必须同样以 GPL 开源并提供源码。
+
+`themes/` 下随主题分发的字体文件不属于本项目代码，各自沿用上游许可：**HarmonyOS Sans SC**（华为 HarmonyOS Sans 字体许可）、**Maple Mono** / **JetBrains Mono** / **Pretendard**（SIL Open Font License 1.1）。再分发或商用时按各字体自己的条款办。
