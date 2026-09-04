@@ -1,0 +1,7 @@
+# 换行统一：仓库内一律存 LF，检出时也用 LF，不受各人 core.autocrlf 影响
+* text=auto eol=lf
+
+# 二进制资源不做换行转换，也不参与文本 diff
+*.png binary
+*.ico binary
+*.icns binary
