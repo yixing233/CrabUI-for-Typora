@@ -247,16 +247,35 @@ fn wait_gone_of(exe_name: &str) -> bool {
     }
 }
 
-/// 拉起 Typora，不等它结束。工作目录设在安装目录，跟双击图标的行为一致。
+/// 拉起前要从子进程环境里摘掉的变量：它们会改写 Node / Electron 的启动方式。
+///
+/// 罪魁祸首是 `ELECTRON_RUN_AS_NODE`——VSCode 的扩展宿主与集成终端都会设成 `1`，
+/// 从那里启动本程序，子进程就一路继承下来。而 Typora 是 Electron 应用：这个变量一开，
+/// `Typora.exe` 就退化成一个普通的 Node 运行时，不给参数时读一遍 stdin 便以 0 退出，
+/// 既不开窗口也不写 `typora.log`，表现就是「点了启动完全没反应」。
+/// `NODE_OPTIONS` / `ELECTRON_NO_ASAR` 同理会干扰启动，一并摘掉，
+/// 让子进程的环境尽量贴近从资源管理器双击图标。
+const STRIP_ENV: [&str; 3] = ["ELECTRON_RUN_AS_NODE", "ELECTRON_NO_ASAR", "NODE_OPTIONS"];
+
+/// 拉起 Typora 用的命令：工作目录设在安装目录，跟双击图标的行为一致。
 /// 三个标准流都接到 null：Typora 活得比本程序久，不该攥着我们的管道端。
-fn launch(exe: &Path) -> Result<(), String> {
+fn launch_cmd(exe: &Path) -> Command {
     let mut cmd = Command::new(exe);
     if let Some(dir) = exe.parent() {
         cmd.current_dir(dir);
     }
+    for key in STRIP_ENV {
+        cmd.env_remove(key);
+    }
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    cmd
+}
+
+/// 拉起 Typora，不等它结束。
+fn launch(exe: &Path) -> Result<(), String> {
+    launch_cmd(exe)
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("启动 Typora 失败：{e}"))
@@ -405,6 +424,28 @@ mod tests {
             }
             Err(err) => println!("本机没探到 Typora：{err}"),
         }
+    }
+
+    /// 拉起 Typora 前必须把 Electron 那几个变量摘掉，否则从 VSCode 的扩展宿主 /
+    /// 集成终端启动本程序时，`ELECTRON_RUN_AS_NODE=1` 会一路继承到 Typora，
+    /// 让 `Typora.exe` 变成普通 Node 运行时，读完 stdin 就以 0 退出——
+    /// 不开窗口、不写日志，界面上看就是「点了启动完全没反应」。
+    #[test]
+    fn launch_strips_electron_env() {
+        let dir = r"D:\Program Files\Typora";
+        let cmd = launch_cmd(&Path::new(dir).join(EXE_NAME));
+        let removed: Vec<&str> = cmd
+            .get_envs()
+            .filter(|(_, v)| v.is_none())
+            .filter_map(|(k, _)| k.to_str())
+            .collect();
+        for key in STRIP_ENV {
+            assert!(removed.contains(&key), "{key} 没被摘掉：{removed:?}");
+        }
+        // 只摘不设：不该顺手往 Typora 的环境里塞东西
+        assert!(cmd.get_envs().all(|(_, v)| v.is_none()));
+        // 工作目录仍落在安装目录，跟双击图标一致
+        assert_eq!(cmd.get_current_dir(), Some(Path::new(dir)));
     }
 
     /// 拿字符映射表当替身，把「启动 → 查存活 → 优雅关闭 → 等它消失」这条链真跑一遍。
