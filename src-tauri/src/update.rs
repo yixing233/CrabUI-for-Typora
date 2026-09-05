@@ -758,4 +758,116 @@ mod tests {
         );
         assert_eq!(items[0].status, "same");
     }
+
+    /// 真的去发布地址走一趟完整流程：取清单 → 比对 → 下载 → 校验 → 就位 → 再比对。
+    ///
+    /// 默认不跑（`#[ignore]`），因为它要联网、要发四五次请求，日常 `cargo test` 不该依赖别人的
+    /// 服务器还在。但改过 [`get_bytes`]、重定向策略或 [`asset_url`] 之后值得手动跑一次——
+    /// 那几处的错只会在真网络上现形：
+    ///
+    /// ```text
+    /// cargo test live_round_trip -- --ignored --nocapture
+    /// ```
+    #[test]
+    #[ignore]
+    fn live_round_trip_against_the_published_manifest() {
+        let tmp = TempDir::new("live");
+        let dir = tmp.dir();
+
+        let p0 = tauri::async_runtime::block_on(plan(&dir, DEFAULT_SOURCE)).expect("取清单");
+        println!(
+            "清单 {} 共 {} 个文件",
+            p0.manifest.version,
+            p0.manifest.files.len()
+        );
+        // 空目录：一个都不该被拒，全都该是 new
+        for item in &p0.items {
+            assert_eq!(item.status, "new", "{} 竟然是 {}", item.path, item.status);
+        }
+
+        // 挑两个最小的主题 CSS 真装下来
+        let mut small: Vec<&ManifestFile> = p0
+            .manifest
+            .files
+            .iter()
+            .filter(|f| f.kind == "theme")
+            .collect();
+        small.sort_by_key(|f| f.size);
+        let picked: Vec<String> = small.iter().take(2).map(|f| f.path.clone()).collect();
+        println!("要装 {picked:?}");
+
+        let report =
+            tauri::async_runtime::block_on(apply(&dir, DEFAULT_SOURCE, &picked, false, |p| {
+                println!("  {}/{} {}", p.done, p.total, p.path)
+            }))
+            .expect("下载并就位");
+        assert!(report.failed.is_empty(), "{:?}", report.failed);
+        assert_eq!(report.installed.len(), picked.len());
+
+        // 装完再比一次：这两个该变成 same，其余仍是 new
+        let p1 = tauri::async_runtime::block_on(plan(&dir, DEFAULT_SOURCE)).expect("再取清单");
+        for item in &p1.items {
+            let want = if picked.contains(&item.path) {
+                "same"
+            } else {
+                "new"
+            };
+            assert_eq!(item.status, want, "{}", item.path);
+        }
+
+        // 脚本闸门：后端不认前端的开关
+        let script = p0
+            .manifest
+            .files
+            .iter()
+            .find(|f| f.kind == "script")
+            .expect("清单里有脚本");
+        let report = tauri::async_runtime::block_on(apply(
+            &dir,
+            DEFAULT_SOURCE,
+            std::slice::from_ref(&script.path),
+            false,
+            |_| {},
+        ))
+        .expect("整条不该失败，只该是这个文件失败");
+        assert!(report.installed.is_empty());
+        assert_eq!(report.failed.len(), 1);
+        println!("脚本被拦：{}", report.failed[0].reason);
+
+        // 再装一个字体：二进制、上兆，走的是多次 chunk 累加那条路
+        let mut fonts: Vec<&ManifestFile> = p0
+            .manifest
+            .files
+            .iter()
+            .filter(|f| f.kind == "font")
+            .collect();
+        fonts.sort_by_key(|f| f.size);
+        let font = fonts.first().expect("清单里有字体");
+        println!("要装字体 {} （{} 字节）", font.path, font.size);
+        let report = tauri::async_runtime::block_on(apply(
+            &dir,
+            DEFAULT_SOURCE,
+            std::slice::from_ref(&font.path),
+            false,
+            |p| println!("  {}/{} {}", p.done, p.total, p.path),
+        ))
+        .expect("字体也该装上");
+        assert!(report.failed.is_empty(), "{:?}", report.failed);
+        let items = compare(&dir, &p0.manifest);
+        assert_eq!(
+            items
+                .iter()
+                .find(|i| i.path == font.path)
+                .expect("字体在结果里")
+                .status,
+            "same"
+        );
+        // 字体不备份
+        assert!(
+            !std::path::Path::new(&dir)
+                .join(format!("{}.crab-bak", font.path))
+                .exists(),
+            "字体不该留备份"
+        );
+    }
 }
