@@ -25,7 +25,6 @@ import {
   RotateCcw,
   RotateCw,
   Save,
-  Sparkles,
   Sun,
   Trash2,
   Undo2,
@@ -51,6 +50,7 @@ import type { PreviewHandle } from './components/PreviewPane';
 import FieldRow from './components/FieldRow';
 import CssDrawer from './components/CssDrawer';
 import TargetList from './components/TargetList';
+import WindowControls from './components/WindowControls';
 
 const { Header, Content, Footer } = Layout;
 const { Text } = Typography;
@@ -471,17 +471,36 @@ export default function App({ dark, onDarkChange }: AppProps) {
   } as const;
 
   return (
-    <Layout className="app-shell">
+    <Layout className={dark ? 'app-shell is-dark' : 'app-shell'}>
+      {/* 系统标题栏已在 tauri.conf.json 里关掉，顶栏自己兼任标题栏：
+          data-tauri-drag-region 只对带属性的元素本身生效、不往子元素传，
+          所以按钮和下拉照常点，落在 logo / 应用名 / 路径旁空白上的拖拽才移动窗口。
+          Tauri 还给这些区域附带了「双击最大化」。 */}
       <Header
+        data-tauri-drag-region
         className="bar"
         style={{ ...barStyle, borderBottom: `1px solid ${token.colorSplit}` }}
       >
-        <Sparkles size={16} color={token.colorPrimary} />
-        <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
+        <img
+          data-tauri-drag-region
+          draggable={false}
+          src="/favicon.png"
+          alt="CrabUI Logo"
+          style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0 }}
+        />
+        <Text
+          data-tauri-drag-region
+          strong
+          className="brand-title"
+          style={{ fontSize: 14, whiteSpace: 'nowrap' }}
+        >
           CrabUI for Typora
         </Text>
 
-        <div style={{ flex: 1, minWidth: 60, display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div
+          data-tauri-drag-region
+          style={{ flex: 1, minWidth: 60, display: 'flex', alignItems: 'center', gap: 2 }}
+        >
           <Text
             type="secondary"
             ellipsis
@@ -545,6 +564,7 @@ export default function App({ dark, onDarkChange }: AppProps) {
             unCheckedChildren="已停用"
           />
         </Tooltip>
+        <WindowControls />
       </Header>
 
       <Content style={{ minHeight: 0, overflow: 'hidden' }}>

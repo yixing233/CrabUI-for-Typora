@@ -17,7 +17,11 @@ function Root() {
       locale={zhCN}
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: '#e0703c', borderRadius: 6, fontSize: 13 },
+        // 主色取应用图标那道蓝→青→绿渐变的蓝端（见 app-icon.svg）。
+        // antd 的 colorPrimary 只吃单色，整条渐变落在 styles.css 的 .brand-title 上。
+        // 取蓝端而非青/绿端：绿是 success、青近 info/link，拿来当主色会跟语义色打架，
+        // 而蓝正好是圆环下半部视觉面积最大的那一段。
+        token: { colorPrimary: '#1B4DE8', borderRadius: 6, fontSize: 13 },
         components: { Slider: { handleSize: 9, handleSizeHover: 11 } },
       }}
     >

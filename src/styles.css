@@ -69,6 +69,74 @@ body {
   min-width: 8px;
 }
 
+/* 应用名铺上图标那道渐变（三个色标与 app-icon.svg 完全一致）。
+   -webkit-text-fill-color 让字面透明、透出底下的渐变，它的优先级高于 color，
+   所以 color 那个蓝端只在浏览器不认 background-clip: text 时露出来，当纯色兜底用。 */
+.brand-title {
+  background-image: linear-gradient(100deg, #1b4de8 0%, #1b9bc8 50%, #22c55e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: #1b4de8;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 深色界面下同一道渐变整体提亮一档：#1b4de8 压在深底上只有 3.5:1 左右，
+   偏暗看不清。色相不动，只抬明度，所以看着还是图标那道渐变。 */
+.is-dark .brand-title {
+  background-image: linear-gradient(100deg, #5b86ff 0%, #38bdf8 50%, #4ade80 100%);
+  color: #5b86ff;
+}
+
+/* 自定义标题栏的窗口按钮。窗口关了 decorations，这三个按钮是唯一入口，
+   所以尺寸照 Windows 的约定来（46×48，字形 10px），换个应用也不用重新认。 */
+.win-ctrl {
+  display: flex;
+  align-self: stretch;
+  /* 顶栏有 12px 内边距，按钮要贴死右上角才像系统标题栏，负 margin 抵掉它 */
+  margin-right: -12px;
+  /* 跟左边的开关多留点距离：紧挨着关闭键容易误点 */
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.win-ctrl-btn {
+  width: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  /* 系统标题栏按钮不给手型光标 */
+  cursor: default;
+  transition: background-color 0.12s;
+}
+
+.win-ctrl-btn:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.win-ctrl-btn:active {
+  background: rgba(128, 128, 128, 0.28);
+}
+
+/* 关闭键单独一套：Windows 那个红是有肌肉记忆的，照抄 */
+.win-ctrl-close:hover,
+.win-ctrl-close:active {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.win-ctrl-close:active {
+  background: #b0271a;
+}
+
+.win-ctrl-btn:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -4px;
+}
+
 /* 控制区：条目列表 + 属性面板 */
 .ctrl-split {
   display: flex;

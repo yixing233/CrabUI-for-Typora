@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- CrabUI for Typora 应用图标：细圆环 + UI 字标，蓝→青→绿线性渐变（左下到右上） -->
+  <defs>
+    <!-- 环用 userSpaceOnUse，让渐变横跨整个圆，左下最蓝、右上最绿 -->
+    <linearGradient id="ring" gradientUnits="userSpaceOnUse" x1="123" y1="901" x2="901" y2="123">
+      <stop offset="0" stop-color="#1B4DE8"/>
+      <stop offset="0.5" stop-color="#1B9BC8"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <!-- 字标单独铺一遍同方向渐变，这样 U 偏蓝、I 偏绿，和原图一致 -->
+    <linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="300" y1="682" x2="724" y2="362">
+      <stop offset="0" stop-color="#1B4DE8"/>
+      <stop offset="0.5" stop-color="#1B9BC8"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="512" cy="512" r="380" fill="none" stroke="url(#ring)" stroke-width="17"/>
+
+  <g fill="none" stroke="url(#mark)" stroke-width="86" stroke-linecap="round">
+    <!-- U：两条竖笔 + 底部半圆弧，圆头端点撑到 y=362 / y=682。
+         sweep-flag 必须是 0：SVG 的正角度方向是顺时针，从左端点用 1 会绕上半圆变成拱形。 -->
+    <path d="M 343 405 V 534 A 105 105 0 0 0 553 534 V 405"/>
+    <!-- I：单竖笔，与 U 同宽同高 -->
+    <path d="M 681 405 V 639"/>
+  </g>
+</svg>
