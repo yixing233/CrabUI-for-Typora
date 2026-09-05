@@ -9,6 +9,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "manifest": "node scripts/gen-manifest.mjs",
     "tauri": "tauri"
   },
   "dependencies": {

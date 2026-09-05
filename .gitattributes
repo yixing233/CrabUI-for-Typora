@@ -13,5 +13,9 @@
 *.ttf binary
 *.otf binary
 
-# crab-inject.ps1 只在 Windows 上跑，按 CRLF 检出
-*.ps1 text eol=crlf
+# crab-inject.ps1 也按 LF 存与检出（PowerShell 不在乎行尾）。
+# 这里不能用 eol=crlf：themes/manifest.json 的 sha256 是按工作区字节算的，而在线更新
+# 从 raw.githubusercontent.com 拿到的是仓库里存的 LF 字节。一旦某个文件在检出时被转成
+# CRLF，在那台机器上重跑生成器就会写进一份 CRLF 的哈希，用户端校验必然失败。
+# 保持「仓库字节 == 检出字节 == manifest 哈希」这一条不变量，比行尾好看重要。
+*.ps1 text eol=lf

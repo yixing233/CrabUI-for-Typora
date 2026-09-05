@@ -1,0 +1,218 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "released": "2026-09-05",
+  "notes": "首个随应用分发的主题包",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "46728968ec5b0afe50f2be4f59301893cbad5eb110da2508453fed3ea3ef9555",
+      "size": 10608,
+      "kind": "doc"
+    },
+    {
+      "path": "crab-classic-dark.css",
+      "sha256": "cc246b8ab02b73ead21876bec965bdbbb7d34e7cc7a11c3c7052ee76c60b6fee",
+      "size": 17280,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-classic-light.css",
+      "sha256": "e93fd186b093ec74963259f47a9444e2ffd7ca2ebff1f7a2fb13308d5efb1673",
+      "size": 16988,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-dark/JetBrainsMonoNL-Bold.ttf",
+      "sha256": "0198e841824025f8876e5c297f0b9b497ee8d6eb9969710a3328e1303f996ec3",
+      "size": 210988,
+      "kind": "font"
+    },
+    {
+      "path": "crab-dark/JetBrainsMonoNL-Regular.ttf",
+      "sha256": "fb3b2575d7b0657359707993288f12a7360344d39387bb26050e276d61f6bd2a",
+      "size": 208576,
+      "kind": "font"
+    },
+    {
+      "path": "crab-dark/Pretendard-Light.otf",
+      "sha256": "51418ee96ef96e9059db88d7da82f24fada1f4aca70d5157c878ea6b460dd343",
+      "size": 1599968,
+      "kind": "font"
+    },
+    {
+      "path": "crab-dark/Pretendard-Regular.otf",
+      "sha256": "3ffbacde6ab8411f1d2db54bb9b1f0b3ee2a738932033722cf0388c06aed1c93",
+      "size": 1574352,
+      "kind": "font"
+    },
+    {
+      "path": "crab-dark/Pretendard-SemiBold.otf",
+      "sha256": "c89bc43027dc7cde5726e96223376f8eec09302b2fc1f8147fd5b57cfc376118",
+      "size": 1583704,
+      "kind": "font"
+    },
+    {
+      "path": "crab-enhance.js",
+      "sha256": "d582799a1c21f87f958f3c0d92bd1015b87dee29a186f8f80b1ed7f712d61747",
+      "size": 34933,
+      "kind": "script"
+    },
+    {
+      "path": "crab-inject.ps1",
+      "sha256": "e1c08c0e7e8fb479a80ba16f62d967b1f2fd39212cd9b7b04da18080244ea3ec",
+      "size": 9326,
+      "kind": "script"
+    },
+    {
+      "path": "crab-plus-blue.css",
+      "sha256": "34e01d9d2944f5cf8f1084a7443f4a03916e2ae4feee595acabb4b987a9f679a",
+      "size": 8235,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-dark-cyan.css",
+      "sha256": "fd8a4c374dc2e0ecd683b9da3ec6bc6b3e5e13bea49fde7dd0a8c21e141606d6",
+      "size": 9887,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-dark-green.css",
+      "sha256": "5393531c50f1e455536bf9109e0a33d67876fe7339fab29b1ab40290a5fa0dcc",
+      "size": 9974,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-dark-red.css",
+      "sha256": "786cd2693521e96b45231b2d59b43e15e7b3b1e35de2485a6e25deffb3b37109",
+      "size": 9840,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-deep-blue.css",
+      "sha256": "825beaa3a8cbc841fb7cbd80a0fcb3931cd3e143f71a5151b9629d4d683a7586",
+      "size": 8475,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-forest-green.css",
+      "sha256": "2df4680ffb9dc77f6cf281a89cf470b81601db8e14bc1683725ec0b0b20fdc95",
+      "size": 8353,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-orange.css",
+      "sha256": "526fff2b7a04c96d7ad85ca27fc3825010f8734a9cff550e61c110d70617d06f",
+      "size": 8525,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-purple.css",
+      "sha256": "23cdeb3efda9e0c6d5b803d24f90bc9739f8b457ff4c1283b3336d9d035c2c0b",
+      "size": 8552,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-red.css",
+      "sha256": "65a24943cd77375b7d9e993cb87f958e759e741e8a9f63d54c8e64b4134c621e",
+      "size": 8461,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-rose.css",
+      "sha256": "c38459ca46a2638bb932cfe88749f46707b89c44d420a503520b69ef6ab9f6c5",
+      "size": 8308,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-plus-teal.css",
+      "sha256": "b1162c51e486914a6da93e92c5cd876348de81596f3fb30570e5075629ccc1ad",
+      "size": 8441,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-simple-green.css",
+      "sha256": "d538fddbc91927606b0857adbf96af92ee942cc0d5ce91d3cb240eae6cdbc6dd",
+      "size": 24734,
+      "kind": "theme"
+    },
+    {
+      "path": "crab-simple-pink.css",
+      "sha256": "9f963dfb1622fbf66fd4d0d1befc5e5ac5adcfa10504bcd16863b031e0d51533",
+      "size": 24276,
+      "kind": "theme"
+    },
+    {
+      "path": "crab/HarmonyOS_Sans_SC_Bold.woff2",
+      "sha256": "b7a6015c263c3c6f345d3622b9a67f9a9ac4eb85fcbcb5310e6de92507d94c48",
+      "size": 4403664,
+      "kind": "font"
+    },
+    {
+      "path": "crab/HarmonyOS_Sans_SC_Light.woff2",
+      "sha256": "83a657254f348d0422225335f2973a24acbbb519a156ce67360f5c5af0b33537",
+      "size": 4273256,
+      "kind": "font"
+    },
+    {
+      "path": "crab/HarmonyOS_Sans_SC_Medium.woff2",
+      "sha256": "5cf909bce9c06c9472f40f377bfdde12262eb0c911c758219d26e9bd1ccf2c68",
+      "size": 4342196,
+      "kind": "font"
+    },
+    {
+      "path": "crab/HarmonyOS_Sans_SC_Regular.woff2",
+      "sha256": "45c43184edd5aba61092ede8e1100e361259380119946352b0afb88398aaf067",
+      "size": 4278948,
+      "kind": "font"
+    },
+    {
+      "path": "crab/HarmonyOS_Sans_SC_Thin.woff2",
+      "sha256": "7d37d14e6332c03143d4c329c382cde8986b36fcc76a55de07311752e35802e8",
+      "size": 4220740,
+      "kind": "font"
+    },
+    {
+      "path": "crab/MapleMonoNormalNL-Bold.ttf.woff2",
+      "sha256": "f920a19a0cecff19b1f2c0171a1c0618131e9b23825fb0f3c01076270d40f7c6",
+      "size": 67948,
+      "kind": "font"
+    },
+    {
+      "path": "crab/MapleMonoNormalNL-Italic.ttf.woff2",
+      "sha256": "fc45476d5108abcbb86515eca7d16fbb2135fa39320172b67a4b5797840502ba",
+      "size": 72100,
+      "kind": "font"
+    },
+    {
+      "path": "crab/MapleMonoNormalNL-Regular.ttf.woff2",
+      "sha256": "3aa0ddc85204abbd765ab231e61c40d123b0b5bde103dc3987ee6f2168898260",
+      "size": 65228,
+      "kind": "font"
+    },
+    {
+      "path": "crab/MapleMonoNormalNL-SemiBold.ttf.woff2",
+      "sha256": "22c5e67e607b6f6d1ac933fefb476796a943cc6d9a8e87b0a0eb6a5788526437",
+      "size": 67928,
+      "kind": "font"
+    },
+    {
+      "path": "crab/MapleMonoNormalNL-SemiBoldItalic.ttf.woff2",
+      "sha256": "a8eb9b46ca17e6636e8a0ac92c18f4e30474ba5fba8d915065c69580937bdbd4",
+      "size": 74496,
+      "kind": "font"
+    },
+    {
+      "path": "crab/crab.dark.css",
+      "sha256": "113c58cd07350e09886393d153b984ed7ed56cc2a251be5cfc040894355129a9",
+      "size": 77906,
+      "kind": "theme"
+    },
+    {
+      "path": "crab/crab.light.css",
+      "sha256": "70a3b2b24a95a76b3934f7e45e9bf135ac901d73132a277010fcdb054e99c731",
+      "size": 58589,
+      "kind": "theme"
+    }
+  ]
+}

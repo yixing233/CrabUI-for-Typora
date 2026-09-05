@@ -1,0 +1,30 @@
+# themes/ 一变就重跑生成器比一遍清单。
+#
+# manifest.json 里的 sha256 一旦落后于实际文件，用户端「检查更新」会把没变的文件报成
+# 「有更新」，下载回来又因为哈希不符被丢掉——一个只在别人机器上出现的故障。
+# 宁可在 PR 里先红一次。
+name: manifest
+
+on:
+  push:
+    paths:
+      - 'themes/**'
+      - 'scripts/gen-manifest.mjs'
+  pull_request:
+    paths:
+      - 'themes/**'
+      - 'scripts/gen-manifest.mjs'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # 生成器只用 node 内置模块，不必 npm install。
+      # 检出的字节等于仓库里存的字节（.gitattributes 全局 eol=lf），所以这里算出的
+      # 哈希和用户从 raw 地址拿到的一致。
+      - run: node scripts/gen-manifest.mjs --check
