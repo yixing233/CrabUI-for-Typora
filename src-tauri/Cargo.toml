@@ -25,4 +25,11 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 在线更新：只要一个 HTTPS GET 和一个 sha256，别的都不要。
+# default-features = false 关掉 charset/http2/gzip 等一堆用不上的东西；native-tls 在 Windows 上
+# 就是系统 schannel，走系统证书库，不额外打包一份 CA bundle，也不引入 OpenSSL。
+# stream 是为了边收边计数：Content-Length 可以撒谎或干脆不给，只有按 chunk 累加才真封得住内存。
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "stream"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+sha2 = "0.10"
 

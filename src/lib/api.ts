@@ -86,3 +86,85 @@ export const restartTypora = (typoraDir: string | null, force: boolean) =>
 
 /** 在系统文件管理器里打开目录或文件所在目录 */
 export const revealPath = (path: string) => invoke<void>('reveal_path', { path });
+
+// ---------------------------------------------------------------- 在线更新
+
+export type AssetKind = 'theme' | 'font' | 'doc' | 'script';
+
+/** 一个文件在本地的处境；rejected 一定带 reason */
+export type UpdateStatus = 'new' | 'changed' | 'same' | 'rejected';
+
+export interface ManifestFile {
+  path: string;
+  sha256: string;
+  size: number;
+  kind: AssetKind;
+}
+
+export interface Manifest {
+  schema: number;
+  version: string;
+  released: string;
+  notes: string;
+  files: ManifestFile[];
+}
+
+export interface UpdateItem {
+  path: string;
+  kind: AssetKind;
+  size: number;
+  status: UpdateStatus;
+  /** 只有 rejected 才有：为什么这个文件不会被更新 */
+  reason?: string;
+}
+
+export interface UpdatePlan {
+  manifest: Manifest;
+  /** 清单里的每一个文件都在，包括 same 与 rejected */
+  items: UpdateItem[];
+}
+
+export interface UpdateReport {
+  version: string;
+  installed: string[];
+  failed: { path: string; reason: string }[];
+}
+
+/** apply 过程中每完成一个文件推一次，事件名 theme-update-progress */
+export interface UpdateProgress {
+  done: number;
+  total: number;
+  path: string;
+  ok: boolean;
+}
+
+export interface AppRelease {
+  current: string;
+  latest: string;
+  /** 线上比本机新；解析不了版本号时一律 false */
+  newer: boolean;
+  notes: string;
+  url: string;
+  published: string;
+}
+
+/** 默认清单地址，用作输入框初值 */
+export const defaultUpdateSource = () => invoke<string>('default_update_source');
+
+/** 比对线上清单与本地文件，只读不落盘 */
+export const planThemeUpdate = (dir: string, source: string) =>
+  invoke<UpdatePlan>('plan_theme_update', { dir, source });
+
+/** 下载 paths 点名的文件并就位；allowScripts 为假时后端会拒掉所有脚本类文件 */
+export const applyThemeUpdate = (
+  dir: string,
+  source: string,
+  paths: string[],
+  allowScripts: boolean,
+) => invoke<UpdateReport>('apply_theme_update', { dir, source, paths, allowScripts });
+
+/** 查一次 GitHub 最新发布，只比版本号 */
+export const checkAppUpdate = () => invoke<AppRelease>('check_app_update');
+
+/** 用系统浏览器打开 https 链接（协议校验在 Rust 侧） */
+export const openExternal = (url: string) => invoke<void>('open_external', { url });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   App as AntApp,
+  Badge,
   Button,
   Empty,
   Layout,
@@ -15,6 +16,7 @@ import {
 } from 'antd';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import {
+  CloudDownload,
   FileCode2,
   FileDown,
   FolderOpen,
@@ -32,7 +34,9 @@ import {
 import { PRESETS, TARGETS, TARGET_MAP } from './lib/model';
 import type { FieldId, Values } from './lib/model';
 import { buildCss, countOverrides, exportCss, sanitizeValues, targetCount } from './lib/css';
+import { sanitizeKinds } from './lib/update';
 import {
+  defaultUpdateSource,
   detectThemes,
   loadConfig,
   patchBaseUserCss,
@@ -44,12 +48,19 @@ import {
   typoraInfo,
   writeOverrideCss,
 } from './lib/api';
-import type { ThemeFlavor, ThemesInfo, TyporaInfo } from './lib/api';
+import type {
+  AssetKind,
+  ThemeFlavor,
+  ThemesInfo,
+  TyporaInfo,
+  UpdateReport,
+} from './lib/api';
 import PreviewPane from './components/PreviewPane';
 import type { PreviewHandle } from './components/PreviewPane';
 import FieldRow from './components/FieldRow';
 import CssDrawer from './components/CssDrawer';
 import TargetList from './components/TargetList';
+import UpdateModal from './components/UpdateModal';
 import WindowControls from './components/WindowControls';
 
 const { Header, Content, Footer } = Layout;
@@ -95,6 +106,15 @@ export default function App({ dark, onDarkChange }: AppProps) {
   /** 自动探测失败时用户手选的 Typora 安装目录，随配置一起存盘 */
   const [typoraDir, setTyporaDir] = useState('');
   const [restarting, setRestarting] = useState(false);
+
+  const [updateOpen, setUpdateOpen] = useState(false);
+  /** 主题清单地址；空串表示还没拿到 Rust 侧的默认值 */
+  const [updateSource, setUpdateSource] = useState('');
+  const [updateKinds, setUpdateKinds] = useState<AssetKind[]>(sanitizeKinds(undefined));
+  /** 上次装好的主题包版本号，只用来在弹窗里显示"本地已装什么" */
+  const [installedVersion, setInstalledVersion] = useState('');
+  /** 检查过之后待更新的文件数，用来在顶栏按钮上挂个红点 */
+  const [pending, setPending] = useState(0);
 
   /** 磁盘配置里我们不认识的顶层字段，回写时原样保留 */
   const extraRef = useRef<Record<string, unknown>>({});
@@ -161,6 +181,8 @@ export default function App({ dark, onDarkChange }: AppProps) {
       try {
         const info = await detectThemes(dir);
         setThemesInfo(info);
+        // 换目录后旧目录的检查结果不再算数，红点先灭掉
+        setPending(0);
 
         let wantFile = '';
         let wantTypora = '';
@@ -173,6 +195,7 @@ export default function App({ dark, onDarkChange }: AppProps) {
           delete rest.enabled;
           delete rest.values;
           delete rest.studio;
+          delete rest.update;
           // 换目录时不要把上一个目录的配置带过去：没有配置文件就一律回到空状态
           extraRef.current = rest;
           setValues(sanitizeValues(parsed.values));
@@ -180,6 +203,14 @@ export default function App({ dark, onDarkChange }: AppProps) {
           const studio = (parsed.studio ?? {}) as Record<string, unknown>;
           if (typeof studio.themeFile === 'string') wantFile = studio.themeFile;
           if (typeof studio.typoraDir === 'string') wantTypora = studio.typoraDir;
+          const update = (parsed.update ?? {}) as Record<string, unknown>;
+          // 配置里没写源地址就保留手里那份（默认值），别把输入框清空
+          if (typeof update.source === 'string' && update.source.trim())
+            setUpdateSource(update.source.trim());
+          setUpdateKinds(sanitizeKinds(update.kinds));
+          setInstalledVersion(
+            typeof update.installedVersion === 'string' ? update.installedVersion : '',
+          );
           setActiveTarget(
             typeof studio.activeTarget === 'string' && TARGET_MAP[studio.activeTarget]
               ? studio.activeTarget
@@ -221,7 +252,18 @@ export default function App({ dark, onDarkChange }: AppProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 400ms 防抖回写配置；只覆盖 version / enabled / values / studio
+  // 默认清单地址由 Rust 侧给，只在配置里没写时兜底。
+  // 用函数式更新是因为它和 boot 读配置是两条并行的异步链，先后顺序不定：
+  // 谁先到都不会把用户配置里的地址盖掉。
+  useEffect(() => {
+    defaultUpdateSource()
+      .then((def) => setUpdateSource((prev) => prev || def))
+      .catch(() => {
+        /* 拿不到就让输入框空着，用户自己填 */
+      });
+  }, []);
+
+  // 400ms 防抖回写配置；只覆盖 version / enabled / values / studio / update
   useEffect(() => {
     if (!loaded || !themesInfo) return;
     const dir = themesInfo.dir;
@@ -232,6 +274,11 @@ export default function App({ dark, onDarkChange }: AppProps) {
         enabled,
         values,
         studio: { themeFile, activeTarget, typoraDir },
+        update: {
+          ...(updateSource ? { source: updateSource } : {}),
+          kinds: updateKinds,
+          ...(installedVersion ? { installedVersion } : {}),
+        },
       };
       saveConfig(dir, JSON.stringify(payload, null, 2)).catch((e) => {
         if (saveWarned.current) return;
@@ -240,7 +287,19 @@ export default function App({ dark, onDarkChange }: AppProps) {
       });
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [values, enabled, themeFile, activeTarget, typoraDir, loaded, themesInfo, fail]);
+  }, [
+    values,
+    enabled,
+    themeFile,
+    activeTarget,
+    typoraDir,
+    updateSource,
+    updateKinds,
+    installedVersion,
+    loaded,
+    themesInfo,
+    fail,
+  ]);
 
   // Typora 可能是在本应用启动之后才被打开 / 关掉的，回到窗口时补探一次，
   // 免得按钮还写着「启动 Typora」却把正在用的实例给关了
@@ -368,6 +427,59 @@ export default function App({ dark, onDarkChange }: AppProps) {
       fail('打开目录失败', e);
     }
   };
+
+  /**
+   * 在线更新装完之后的收尾。
+   *
+   * 这时候 themesInfo 还是更新前那一份——更新弹窗只调 plan / apply，不碰这里的状态——
+   * 所以正好能用它认出哪些主题在更新前带着我们的标记区块。更新是整文件覆盖，区块随之消失，
+   * 得按当前排版原样写回去。
+   */
+  const handleInstalled = useCallback(
+    async (report: UpdateReport) => {
+      if (!themesInfo) return;
+      const dir = themesInfo.dir;
+      setInstalledVersion(report.version);
+
+      // 只补「更新前有区块」且「这次真被覆盖了」的主题：没被下载的文件区块还在，不必重写
+      const landed = new Set(report.installed);
+      const redo = themesInfo.themes.filter((t) => t.patched && landed.has(t.file));
+      const lost: string[] = [];
+      for (const entry of redo) {
+        try {
+          await patchThemeCss(dir, entry.file, overrideCss);
+        } catch {
+          lost.push(entry.file);
+        }
+      }
+      if (lost.length) {
+        notification.warning({
+          message: `${lost.length} 个主题的覆盖区块没能写回`,
+          description: `${lost.join('、')} —— 在界面里重新点一次「写入所选主题」即可。`,
+          placement: 'bottomRight',
+        });
+      }
+
+      // 主题文件已被换掉：重探一次列表与标记状态，并把预览用的那份 CSS 重新读进来。
+      // 这里故意不走 boot()——它会连配置一起重读，刚设进 state 的 installedVersion
+      // 还没到 400ms 的回写就会被磁盘上的旧值盖回去。
+      try {
+        const info = await detectThemes(dir);
+        setThemesInfo(info);
+        const next =
+          info.themes.find((t) => t.file === themeFile)?.file ?? info.themes[0]?.file ?? '';
+        if (next) await loadTheme(dir, next);
+      } catch (e) {
+        fail('更新后重新探测 themes 目录失败', e);
+      }
+
+      const back = redo.length - lost.length;
+      setStatus(
+        `主题包已更新到 ${report.version}${back > 0 ? `，并写回 ${back} 个覆盖区块` : ''}`,
+      );
+    },
+    [themesInfo, themeFile, overrideCss, loadTheme, notification, fail],
+  );
 
   /** 自动探测失败时手选 Typora 安装目录，选中的路径随配置存盘 */
   const pickTyporaDir = async () => {
@@ -528,6 +640,17 @@ export default function App({ dark, onDarkChange }: AppProps) {
               onClick={() => void boot(themesInfo?.dir ?? null)}
             />
           </Tooltip>
+          <Badge dot={pending > 0} offset={[-5, 3]}>
+            <Tooltip title={pending > 0 ? `有 ${pending} 个文件待更新` : '在线更新主题包与应用'}>
+              <Button
+                type="text"
+                size="small"
+                aria-label="在线更新"
+                icon={<CloudDownload size={14} />}
+                onClick={() => setUpdateOpen(true)}
+              />
+            </Tooltip>
+          </Badge>
         </div>
 
         <Select
@@ -771,6 +894,19 @@ export default function App({ dark, onDarkChange }: AppProps) {
         css={exportedCss}
         onClose={() => setDrawerOpen(false)}
         onSave={saveOverride}
+      />
+
+      <UpdateModal
+        open={updateOpen}
+        dir={themesInfo?.dir ?? ''}
+        source={updateSource}
+        kinds={updateKinds}
+        installedVersion={installedVersion}
+        onSourceChange={setUpdateSource}
+        onKindsChange={setUpdateKinds}
+        onPendingChange={setPending}
+        onClose={() => setUpdateOpen(false)}
+        onInstalled={handleInstalled}
       />
     </Layout>
   );

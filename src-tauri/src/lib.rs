@@ -1,8 +1,9 @@
 mod fsops;
 mod typora;
+mod update;
 
 use fsops::{PreviewCss, ThemesInfo};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 /// 把 themes 目录加进 asset 协议白名单，预览 iframe 才能用 asset:// 取到主题字体。
@@ -97,6 +98,51 @@ fn restart_typora(
     typora::restart(typora_dir.as_deref(), force)
 }
 
+/// 默认的主题清单地址，交给界面当输入框的初值。
+#[tauri::command]
+fn default_update_source() -> &'static str {
+    update::DEFAULT_SOURCE
+}
+
+/// 比对线上清单与本地文件，逐个给出 new / changed / same / rejected。只读，不动磁盘。
+#[tauri::command(async)]
+async fn plan_theme_update(dir: String, source: String) -> Result<update::UpdatePlan, String> {
+    update::plan(&dir, &source).await
+}
+
+/// 下载 paths 里点名的文件并就位。每完成一个 emit 一次 theme-update-progress。
+///
+/// allow_scripts 由界面上那个默认关闭的开关传进来，但真正把关的是 update 模块里的复核——
+/// 这里只是把用户的选择转进去。
+#[tauri::command(async)]
+async fn apply_theme_update(
+    app: tauri::AppHandle,
+    dir: String,
+    source: String,
+    paths: Vec<String>,
+    allow_scripts: bool,
+) -> Result<update::UpdateReport, String> {
+    update::apply(&dir, &source, &paths, allow_scripts, |progress| {
+        let _ = app.emit("theme-update-progress", progress);
+    })
+    .await
+}
+
+/// 查一次 GitHub 的最新发布，只比版本号、只返回说明和发布页地址。
+#[tauri::command(async)]
+async fn check_app_update() -> Result<update::AppRelease, String> {
+    update::check_app().await
+}
+
+/// 用系统浏览器打开一个 https 链接。协议校验在 Rust 这边做，前端拿不到任意 URL 的开门权。
+#[tauri::command]
+fn open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let safe = update::check_external(&url)?;
+    app.opener()
+        .open_url(safe, None::<&str>)
+        .map_err(|e| format!("打开链接失败：{e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -119,7 +165,12 @@ pub fn run() {
             patch_theme_css,
             reveal_path,
             typora_info,
-            restart_typora
+            restart_typora,
+            default_update_source,
+            plan_theme_update,
+            apply_theme_update,
+            check_app_update,
+            open_external
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
