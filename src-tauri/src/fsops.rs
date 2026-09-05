@@ -153,7 +153,195 @@ fn write_text(path: &Path, text: &str) -> Result<(), String> {
     fs::write(path, text.as_bytes()).map_err(|e| format!("写入失败 {}：{}", to_slash(path), e))
 }
 
-// ---------------------------------------------------------------- 主题探测与列表
+// ---------------------------------------------------------------- 在线更新的资源路径
+
+/// manifest 里的 kind 与它允许的扩展名。
+///
+/// 这张表就是「一次在线更新最多能改动哪些文件」的完整定义，改它等于改这个功能的攻击面：
+/// `.html`（两个 Crab Theme Studio 页面）故意不在表里，`.exe`/`.dll` 之类更不会进来。
+pub const ASSET_KINDS: &[(&str, &[&str])] = &[
+    ("theme", &[".css"]),
+    ("font", &[".woff2", ".woff", ".ttf", ".otf"]),
+    ("doc", &[".md"]),
+    ("script", &[".js", ".ps1"]),
+];
+
+/// 下载中的临时后缀，落盘前用它占位，rename 成功才算就位。
+pub const DL_SUFFIX: &str = ".crab-dl";
+
+/// 层数上限：`crab/x.woff2` 可以，`a/b/c.css` 不行。现实里只有 crab/ 和 crab-dark/ 两个子目录。
+const MAX_ASSET_DEPTH: usize = 2;
+
+/// 单个路径段的白名单，字符集与 [`is_plain_css_name`] 同一套（不含分隔符，所以段内不可能藏路径）。
+/// `.` 和 `..` 单独挡：它们能通过字符检查，但正是拿来往上跳的那两个。
+fn is_plain_segment(seg: &str) -> bool {
+    if seg.is_empty() || seg == "." || seg == ".." {
+        return false;
+    }
+    seg.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | ' '))
+}
+
+/// Windows 设备名：`NUL.css` 打开的是空设备而不是文件，写进去的字节直接消失、读出来永远是空。
+/// 不构成越界，但静默成功比报错难查得多，直接挡掉。
+fn is_reserved_windows_name(seg: &str) -> bool {
+    const RESERVED: &[&str] = &[
+        "CON", "PRN", "AUX", "NUL", "COM0", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+        "COM8", "COM9", "LPT0", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8",
+        "LPT9",
+    ];
+    let stem = seg.split('.').next().unwrap_or_default().trim_end();
+    RESERVED.iter().any(|r| stem.eq_ignore_ascii_case(r))
+}
+
+/// 取最后一个扩展名并小写。`MapleMonoNormalNL-Bold.ttf.woff2` 要判成 `.woff2`。
+/// 开头的点不算扩展名（`.md` 这种纯扩展名的文件名没有主名，一律拒）。
+fn ext_of(name: &str) -> Option<String> {
+    let dot = name.rfind('.')?;
+    if dot == 0 {
+        return None;
+    }
+    Some(name[dot..].to_ascii_lowercase())
+}
+
+/// 扩展名必须与 manifest 声明的 kind 对得上——否则一个 `kind: "theme"` 的条目就能塞进 `.ps1`。
+fn ext_matches_kind(rel: &str, kind: &str) -> bool {
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    let Some(ext) = ext_of(name) else {
+        return false;
+    };
+    ASSET_KINDS
+        .iter()
+        .any(|(k, exts)| *k == kind && exts.contains(&ext.as_str()))
+}
+
+/// 已通过全部校验的落点。
+///
+/// 字段私有、模块外没有别的构造方式，所以「拿到 SafePath」等价于「这条路径查过了」。
+/// [`write_asset`] 只收它——把校验做进类型里，调用方就没有绕过的机会。
+#[derive(Debug, Clone)]
+pub struct SafePath {
+    abs: PathBuf,
+    rel: String,
+}
+
+impl SafePath {
+    pub fn path(&self) -> &Path {
+        &self.abs
+    }
+
+    pub fn rel(&self) -> &str {
+        &self.rel
+    }
+}
+
+/// 把 manifest 里的相对路径解析成 themes 目录内的落点，规则与 `scripts/gen-manifest.mjs` 一致。
+///
+/// 这是在线更新的安全边界，拒绝的东西按出现顺序：反斜杠、冒号（盘符与 NTFS 数据流）、
+/// 以 / 开头的绝对路径、未知 kind、超过两层、非法段（含 `.` `..` 空段）、Windows 设备名、
+/// 扩展名与 kind 不符。最后再复核一次包含关系，防的是 themes 里有个符号链接指向外面。
+pub fn resolve_asset_in_dir(dir: &str, rel: &str, kind: &str) -> Result<SafePath, String> {
+    if rel.is_empty() {
+        return Err("清单里有一条空路径".to_string());
+    }
+    if rel.contains('\\') {
+        return Err(format!("路径里有反斜杠，已拒绝：{rel}"));
+    }
+    if rel.contains(':') {
+        return Err(format!("路径里有冒号（盘符或数据流），已拒绝：{rel}"));
+    }
+    if rel.starts_with('/') {
+        return Err(format!("路径不能以 / 开头，已拒绝：{rel}"));
+    }
+    if !ASSET_KINDS.iter().any(|(k, _)| *k == kind) {
+        return Err(format!("未知的文件类型 {kind}：{rel}"));
+    }
+
+    let segs: Vec<&str> = rel.split('/').collect();
+    if segs.len() > MAX_ASSET_DEPTH {
+        return Err(format!("路径超过 {MAX_ASSET_DEPTH} 层，已拒绝：{rel}"));
+    }
+    for seg in &segs {
+        if !is_plain_segment(seg) {
+            return Err(format!("路径里有非法的一段（{seg}），已拒绝：{rel}"));
+        }
+        if is_reserved_windows_name(seg) {
+            return Err(format!("{seg} 是 Windows 保留的设备名，已拒绝：{rel}"));
+        }
+    }
+    if !ext_matches_kind(rel, kind) {
+        return Err(format!("{rel} 的扩展名与类型 {kind} 不符，已拒绝"));
+    }
+
+    let base = canonical_dir(dir)?;
+    let abs = segs.iter().fold(base.clone(), |acc, seg| acc.join(seg));
+    if !asset_inside(&base, &abs) {
+        return Err(format!("{rel} 解析后不在目录 {dir} 内，已拒绝"));
+    }
+    Ok(SafePath {
+        abs,
+        rel: rel.to_string(),
+    })
+}
+
+/// canonicalize 后仍须落在 base 内——挡的是 themes 里有个符号链接把 crab/ 指到别处。
+/// 文件或其父目录可能还不存在（首次安装），那就退回结构性判断：段已过白名单，
+/// 既无 `..` 也无分隔符，拼出来的路径本来就在 base 里。
+fn asset_inside(base: &Path, abs: &Path) -> bool {
+    if let Ok(real) = fs::canonicalize(abs) {
+        return real.starts_with(base);
+    }
+    let Some(parent) = abs.parent() else {
+        return false;
+    };
+    if let Ok(real) = fs::canonicalize(parent) {
+        return real.starts_with(base);
+    }
+    parent == base || parent.parent() == Some(base)
+}
+
+/// 读资源字节，用来算本地 sha256。不存在返回 `Ok(None)`——那是「新文件」，不是错误。
+pub fn read_asset(target: &SafePath) -> Result<Option<Vec<u8>>, String> {
+    match fs::read(target.path()) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("读取失败 {}：{}", target.rel(), e)),
+    }
+}
+
+/// 二进制与子目录写入的唯一出口。
+///
+/// 先写 `<name>.crab-dl` 再 rename 就位：中途断网或崩掉，themes 里留下的是一个带 .crab-dl
+/// 后缀的残片，而不是半个主题文件或半个字体。现有的 [`write_text`] 白名单一个字没动——
+/// 这条路是另开的，两条路各自收紧，谁也没有放宽谁。
+pub fn write_asset(target: &SafePath, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = target.path().parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("建目录失败 {}：{}", to_slash(parent), e))?;
+    }
+    let mut tmp = target.path().as_os_str().to_os_string();
+    tmp.push(DL_SUFFIX);
+    let tmp = PathBuf::from(tmp);
+
+    fs::write(&tmp, bytes).map_err(|e| format!("写入失败 {}：{}", target.rel(), e))?;
+    // Windows 的 rename 不覆盖已存在的目标，得先把旧文件挪走。
+    if target.path().exists() {
+        fs::remove_file(target.path())
+            .map_err(|e| format!("替换前删除旧文件失败 {}：{}", target.rel(), e))?;
+    }
+    fs::rename(&tmp, target.path()).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("就位失败 {}：{}", target.rel(), e)
+    })
+}
+
+/// 覆盖前留一份 `<name>.crab-bak`，语义与主题写入那边完全一致：已有备份不覆盖。
+pub fn backup_asset(target: &SafePath) -> Result<(), String> {
+    if !target.path().is_file() {
+        return Ok(());
+    }
+    backup_once(target.path())
+}
 
 /// custom 给了就必须可用；否则按 APPDATA、USERPROFILE 顺序探测。
 pub fn detect_dir(custom: Option<&str>) -> Result<PathBuf, String> {
@@ -956,5 +1144,95 @@ mod tests {
         // 目录不存在 / 不是目录都要报错
         assert!(collect_themes_info(Some(&format!("{dir}/nope"))).is_err());
         assert!(collect_themes_info(Some(&format!("{dir}/{OVERRIDE_CSS}"))).is_err());
+    }
+
+    #[test]
+    fn resolve_asset_rejects_hostile_paths() {
+        let tmp = TempDir::new("asset-reject");
+        let dir = tmp.dir();
+
+        for (rel, kind) in [
+            ("crab-plus-blue.css", "theme"),
+            ("crab/crab.dark.css", "theme"),
+            ("crab/HarmonyOS_Sans_SC_Regular.woff2", "font"),
+            // 双扩展名要取最后一个，判成 .woff2 而不是 .ttf
+            ("crab/MapleMonoNormalNL-Bold.ttf.woff2", "font"),
+            ("crab-dark/Pretendard-Light.otf", "font"),
+            ("README.md", "doc"),
+            ("crab-enhance.js", "script"),
+            ("crab-inject.ps1", "script"),
+        ] {
+            let safe = resolve_asset_in_dir(&dir, rel, kind)
+                .unwrap_or_else(|e| panic!("{rel} 应当通过，却被拒：{e}"));
+            assert_eq!(safe.rel(), rel);
+            assert!(to_slash(safe.path()).starts_with(&dir));
+        }
+
+        for (rel, kind) in [
+            ("", "theme"),
+            ("../outside.css", "theme"),
+            ("crab/../../outside.css", "theme"),
+            ("./crab.css", "theme"),
+            ("/etc/passwd.css", "theme"),
+            ("C:/Windows/x.css", "theme"),
+            ("crab\\x.css", "theme"),
+            ("\\\\host\\share\\x.css", "theme"),
+            ("a/b/c.css", "theme"),
+            ("crab//x.css", "theme"),
+            ("x.css:stream", "theme"),
+            (".css", "theme"),
+            ("NUL.css", "theme"),
+            ("crab/nul.woff2", "font"),
+            // kind 与扩展名对不上，两个方向都不行
+            ("crab-enhance.js", "theme"),
+            ("crab-plus-blue.css", "script"),
+            ("evil.exe", "theme"),
+            ("Crab Theme Studio.html", "doc"),
+            ("x.css", "widget"),
+        ] {
+            assert!(
+                resolve_asset_in_dir(&dir, rel, kind).is_err(),
+                "{rel}（{kind}）本该被拒，却通过了"
+            );
+        }
+    }
+
+    #[test]
+    fn write_asset_lands_atomically_and_backs_up_once() {
+        let tmp = TempDir::new("asset-write");
+        let dir = tmp.dir();
+
+        // crab/ 还不存在也能落地
+        let font =
+            resolve_asset_in_dir(&dir, "crab/HarmonyOS_Sans_SC_Regular.woff2", "font").unwrap();
+        assert!(read_asset(&font).unwrap().is_none(), "还没写，该是 None");
+        write_asset(&font, &[0x77, 0x4F, 0x46, 0x32]).unwrap();
+        assert_eq!(
+            read_asset(&font).unwrap().as_deref(),
+            Some(&[0x77, 0x4F, 0x46, 0x32][..])
+        );
+
+        let leftovers: Vec<String> = fs::read_dir(tmp.path().join("crab"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(DL_SUFFIX))
+            .collect();
+        assert!(leftovers.is_empty(), "留下了 .crab-dl 残片：{leftovers:?}");
+
+        // 反复覆盖，但备份只留最原始的那一份
+        let theme = resolve_asset_in_dir(&dir, "crab-plus-blue.css", "theme").unwrap();
+        write_asset(&theme, b"v1").unwrap();
+        backup_asset(&theme).unwrap();
+        write_asset(&theme, b"v2").unwrap();
+        backup_asset(&theme).unwrap();
+        write_asset(&theme, b"v3").unwrap();
+
+        assert_eq!(read_asset(&theme).unwrap().as_deref(), Some(&b"v3"[..]));
+        assert_eq!(
+            fs::read_to_string(tmp.path().join(format!("crab-plus-blue.css{BAK_SUFFIX}"))).unwrap(),
+            "v1",
+            "已有备份不该被覆盖"
+        );
     }
 }
