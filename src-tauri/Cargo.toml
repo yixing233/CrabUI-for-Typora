@@ -1,6 +1,6 @@
 [package]
 name = "crabui"
-version = "0.1.0"
+version = "1.0.0"
 description = "CrabUI for Typora · Crab 主题排版管理器"
 authors = ["yixing233"]
 edition = "2021"
