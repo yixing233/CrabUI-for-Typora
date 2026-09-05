@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# themes/ 是随仓库分发的主题载荷，但它同时也是 CrabUI 能直接指向的一个主题目录。
+# 一旦有人把应用指到仓库这份副本上做调试，应用就会在里面写下这些运行时文件——
+# 它们属于某台机器上的某次使用，不是主题的一部分。
+themes/crab-typography.json
+themes/*.crab-bak
+themes/*.crab-dl

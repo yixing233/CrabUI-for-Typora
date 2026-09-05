@@ -5,3 +5,13 @@
 *.png binary
 *.ico binary
 *.icns binary
+
+# 主题字体。git 的启发式（前 8KB 有 NUL 即算二进制）本来也能兜住，
+# 但显式标掉更稳：哪天某个 woff2 的头 8KB 恰好没有 NUL 就会被当文本改坏。
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+
+# crab-inject.ps1 只在 Windows 上跑，按 CRLF 检出
+*.ps1 text eol=crlf
