@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Button, Segmented, theme, Tooltip } from 'antd';
+import { Button, theme, Tooltip } from 'antd';
 import { Eye } from 'lucide-react';
 import { TARGET_MAP } from '../lib/model';
 import { buildPreviewDoc } from '../lib/preview';
@@ -23,11 +23,8 @@ export interface PreviewPaneProps {
   onDocReady?: () => void;
 }
 
-const ZOOMS = [
-  { label: '80%', value: 80 },
-  { label: '100%', value: 100 },
-  { label: '125%', value: 125 },
-];
+/** 松手快于这个毫秒数就当成点击（切换锁定），慢于它算按住（临时查看） */
+const HOLD_MS = 250;
 
 /**
  * 主题 CSS 变化才重建 srcDoc；拖滑块产生的 overrideCss 变化只就地改
@@ -40,8 +37,23 @@ const PreviewPane = forwardRef<PreviewHandle, PreviewPaneProps>(function Preview
   const { token } = theme.useToken();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const overrideRef = useRef(overrideCss);
-  const [zoom, setZoom] = useState(100);
-  const [bare, setBare] = useState(false);
+  /** 点击锁定的「只看主题原样」状态 */
+  const [locked, setLocked] = useState(false);
+  /** 按住期间的临时状态，显示与 locked 相反的那一侧 */
+  const [peeking, setPeeking] = useState(false);
+  const pressAt = useRef(0);
+  const bare = peeking ? !locked : locked;
+
+  const startPeek = useCallback(() => {
+    pressAt.current = Date.now();
+    setPeeking(true);
+  }, []);
+
+  /** 松手：短按当点击，切换锁定态；按住超过阈值只是临时对比，回到原状 */
+  const endPeek = useCallback((commit: boolean) => {
+    setPeeking(false);
+    if (commit && Date.now() - pressAt.current < HOLD_MS) setLocked((v) => !v);
+  }, []);
 
   const srcDoc = useMemo(
     () => buildPreviewDoc({ themeCss, overrideCss: overrideRef.current, baseDir, dark }),
@@ -112,8 +124,6 @@ const PreviewPane = forwardRef<PreviewHandle, PreviewPaneProps>(function Preview
     [],
   );
 
-  const scale = zoom / 100;
-
   return (
     <div className="preview-wrap">
       <iframe
@@ -123,7 +133,6 @@ const PreviewPane = forwardRef<PreviewHandle, PreviewPaneProps>(function Preview
         sandbox="allow-same-origin"
         srcDoc={srcDoc}
         onLoad={handleLoad}
-        style={{ zoom: scale, width: `${100 / scale}%`, height: `${100 / scale}%` }}
       />
       <div
         className="preview-tools"
@@ -133,29 +142,26 @@ const PreviewPane = forwardRef<PreviewHandle, PreviewPaneProps>(function Preview
           boxShadow: token.boxShadowTertiary,
         }}
       >
-        <Segmented
-          size="small"
-          value={zoom}
-          options={ZOOMS}
-          onChange={(v) => setZoom(Number(v))}
-          aria-label="预览缩放"
-        />
-        <Tooltip title="按住只看主题原样，松开恢复自定义">
+        <Tooltip title="点击锁定「只看主题原样」，按住可临时对比">
           <Button
             size="small"
             type={bare ? 'primary' : 'text'}
-            aria-label="按住只看主题原样"
-            aria-pressed={bare}
+            aria-label="只看主题原样"
+            aria-pressed={locked}
             icon={<Eye size={14} />}
-            onPointerDown={() => setBare(true)}
-            onPointerUp={() => setBare(false)}
-            onPointerLeave={() => setBare(false)}
-            onPointerCancel={() => setBare(false)}
+            onPointerDown={startPeek}
+            onPointerUp={() => endPeek(true)}
+            onPointerLeave={() => endPeek(false)}
+            onPointerCancel={() => endPeek(false)}
             onKeyDown={(e) => {
-              if (!e.repeat && (e.key === 'Enter' || e.key === ' ')) setBare(true);
+              if (!e.repeat && (e.key === 'Enter' || e.key === ' ')) startPeek();
             }}
-            onKeyUp={() => setBare(false)}
-            onClick={(e) => e.preventDefault()}
+            onKeyUp={(e) => {
+              // 键盘一律按「切换」处理，不看按住时长，免得慢按一下没反应
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              setPeeking(false);
+              setLocked((v) => !v);
+            }}
           />
         </Tooltip>
       </div>
